@@ -1,5 +1,9 @@
 metrics_to_run:
+  - general_quality
+  - instruction_following
+  # - tool_use_quality requires multi-turn evaluations
   - custom_response_quality
+  - agent_turn_count
 
 custom_metrics:
   # Default: local LLM-as-judge defined in metrics.py (a real, lintable/testable

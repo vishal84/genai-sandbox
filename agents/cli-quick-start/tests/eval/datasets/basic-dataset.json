@@ -26,6 +26,13 @@
           "parts": [{"text": "The capital of France is Paris."}]
         }
       }
+    },
+    {
+      "eval_case_id": "count_words",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Count the number of words in this sentence."}]
+      }
     }
   ]
 }
