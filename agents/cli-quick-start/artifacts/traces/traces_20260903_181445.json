@@ -14,7 +14,7 @@
           "response": {
             "parts": [
               {
-                "text": "Hello there! I'm your go-to weather pal! \n\nNeed a forecast? I've got you covered! Wondering about the time somewhere? I can track that down, too! \n\nAsk me anything—I'm ready to take the world by *storm*!"
+                "text": "Hello there! I'm your go-to weather reporter! \n\nNeed the local forecast? I've got you covered! \nWondering about the time in any city? Just ask! \nI can even count words in a flash! \n\nWhatever you need, I'm ready to *breeze* right through it!"
               }
             ],
             "role": "model"
@@ -101,7 +101,7 @@
                 "content": {
                   "parts": [
                     {
-                      "text": "Hello there! I'm your go-to weather pal! \n\nNeed a forecast? I've got you covered! Wondering about the time somewhere? I can track that down, too! \n\nAsk me anything—I'm ready to take the world by *storm*!"
+                      "text": "Hello there! I'm your go-to weather reporter! \n\nNeed the local forecast? I've got you covered! \nWondering about the time in any city? Just ask! \nI can even count words in a flash! \n\nWhatever you need, I'm ready to *breeze* right through it!"
                     }
                   ],
                   "role": "model"
@@ -126,7 +126,7 @@
           "response": {
             "parts": [
               {
-                "text": "Good day, San Francisco! \n\nRight now, it's a brisk 60 degrees out there! The fog is rolling in thick across the bay! Grab a cozy jacket before you step out! \n\nIf you're looking for clear skies today, you haven't the *foggiest* chance! Stay warm and shine on!"
+                "text": "San Francisco is rolling in at a cool 60 degrees! \n\nClassic fog is blanketing the Bay today. \n\nDon't worry, you're not **mist-aken**—Karl the Fog is definitely in town! \n\nGrab a jacket and stay breezy!"
               }
             ],
             "role": "model"
@@ -214,7 +214,7 @@
                   "parts": [
                     {
                       "function_call": {
-                        "id": "call_3094789",
+                        "id": "call_2737752",
                         "args": {
                           "query": "San Francisco"
                         },
@@ -231,7 +231,7 @@
                   "parts": [
                     {
                       "function_response": {
-                        "id": "call_3094789",
+                        "id": "call_2737752",
                         "name": "get_weather",
                         "response": {
                           "result": "It's 60 degrees and foggy."
@@ -247,7 +247,7 @@
                 "content": {
                   "parts": [
                     {
-                      "text": "Good day, San Francisco! \n\nRight now, it's a brisk 60 degrees out there! The fog is rolling in thick across the bay! Grab a cozy jacket before you step out! \n\nIf you're looking for clear skies today, you haven't the *foggiest* chance! Stay warm and shine on!"
+                      "text": "San Francisco is rolling in at a cool 60 degrees! \n\nClassic fog is blanketing the Bay today. \n\nDon't worry, you're not **mist-aken**—Karl the Fog is definitely in town! \n\nGrab a jacket and stay breezy!"
                     }
                   ],
                   "role": "model"
@@ -272,7 +272,7 @@
           "response": {
             "parts": [
               {
-                "text": "The capital of France is Paris! \n\nIt's always a breeze exploring the City of Light! Don't let anyone rain on your parade there!"
+                "text": "The capital of France is Paris! \n\nIt's a breezy fact to remember! There's no *cloud* of doubt about that one!"
               }
             ],
             "role": "model"
@@ -369,7 +369,7 @@
                 "content": {
                   "parts": [
                     {
-                      "text": "The capital of France is Paris! \n\nIt's always a breeze exploring the City of Light! Don't let anyone rain on your parade there!"
+                      "text": "The capital of France is Paris! \n\nIt's a breezy fact to remember! There's no *cloud* of doubt about that one!"
                     }
                   ],
                   "role": "model"
@@ -394,7 +394,7 @@
           "response": {
             "parts": [
               {
-                "text": "That sentence has exactly 8 words! \n\nLooks like clear skies and high visibility ahead! There's no *cloud* of doubt about that count!"
+                "text": "That sentence has exactly 8 words! \n\nNo clouds on the horizon here. Counting words is an absolute breeze!"
               }
             ],
             "role": "model"
@@ -482,7 +482,7 @@
                   "parts": [
                     {
                       "function_call": {
-                        "id": "call_917135",
+                        "id": "call_2631518",
                         "args": {
                           "text": "Count the number of words in this sentence."
                         },
@@ -499,7 +499,7 @@
                   "parts": [
                     {
                       "function_response": {
-                        "id": "call_917135",
+                        "id": "call_2631518",
                         "name": "count_words",
                         "response": {
                           "result": "The text contains 8 words."
@@ -515,7 +515,7 @@
                 "content": {
                   "parts": [
                     {
-                      "text": "That sentence has exactly 8 words! \n\nLooks like clear skies and high visibility ahead! There's no *cloud* of doubt about that count!"
+                      "text": "That sentence has exactly 8 words! \n\nNo clouds on the horizon here. Counting words is an absolute breeze!"
                     }
                   ],
                   "role": "model"

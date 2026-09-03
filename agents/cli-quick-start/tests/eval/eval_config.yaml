@@ -17,6 +17,9 @@ custom_metrics:
     custom_function_file: metrics.py
   - name: agent_turn_count
     custom_function: |
-      def evaluate(instance):
+      def evaluate(instance: dict) -> dict:
           turns = (instance.get("agent_data") or {}).get("turns", [])
-          return {'score': len(turns)}
+          return {
+            'score': len(turns),
+            'explanation': f'The agent had {len(turns)} turns.'
+          }
