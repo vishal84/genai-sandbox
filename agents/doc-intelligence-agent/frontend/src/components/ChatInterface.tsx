@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, BookOpen, ExternalLink, ThumbsUp } from 'lucide-react';
+import { Send, Bot, User, Sparkles, BookOpen, ExternalLink } from 'lucide-react';
 import { Message, Citation } from '../types';
 
 interface ChatInterfaceProps {
@@ -15,7 +15,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   isLoading,
   onSelectCitation,
-  onSendFeedback,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
