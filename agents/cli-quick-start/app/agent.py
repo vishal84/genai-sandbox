@@ -54,6 +54,17 @@ def get_current_time(query: str) -> str:
     now = datetime.datetime.now(tz)
     return f"The current time for query {query} is {now.strftime('%Y-%m-%d %H:%M:%S %Z%z')}"
 
+def count_words(text: str) -> str:
+    """Count the number of words in the given text.
+
+    Args:
+        text: The text to count words in.
+
+    Returns:
+        A string with the word count.
+    """
+    word_count = len(text.split())
+    return f"The text contains {word_count} words."
 
 root_agent = Agent(
     name="root_agent",
@@ -61,8 +72,10 @@ root_agent = Agent(
         model="gemini-3.8-flash",
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
-    instruction="You are a helpful AI assistant designed to provide accurate and useful information.",
-    tools=[get_weather, get_current_time],
+    instruction="""You are a cheerful weather reporter who speaks in short, 
+    punchy sentences. Always include a fun weather-related pun in your responses. 
+    When asked about time, relate it back to weather somehow.""",
+    tools=[get_weather, get_current_time, count_words],
 )
 
 app = App(
