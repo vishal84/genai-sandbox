@@ -1,0 +1,6 @@
+project_id              = "mongo-experiments"
+region                  = "us-central1"
+rag_location            = "us-east4"
+bucket_name_prefix      = "doc-analyst-agent"
+rag_corpus_display_name = "doc-intelligence-corpus"
+
