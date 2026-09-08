@@ -30,34 +30,100 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setInput('');
   };
 
-  const renderMessageContent = (text: string, citations?: Citation[]) => {
-    if (!citations || citations.length === 0) {
-      return <span>{text}</span>;
-    }
-
-    // Split text by citation brackets like [1], [2]
-    const parts = text.split(/(\[\d+\])/g);
+  const renderFormattedInline = (inlineText: string, citations?: Citation[]) => {
+    const parts = inlineText.split(/(\[\d+\])/g);
     return (
-      <span>
+      <>
         {parts.map((part, index) => {
           const match = part.match(/^\[(\d+)\]$/);
           if (match) {
             const citeIdx = parseInt(match[1], 10);
-            const foundCitation = citations.find((c) => c.citation_index === citeIdx);
+            const foundCitation = citations?.find((c) => c.citation_index === citeIdx);
+            const pageText = foundCitation?.page_range || (foundCitation?.page_number ? `p.${foundCitation.page_number}` : '');
             return (
               <button
                 key={index}
                 onClick={() => foundCitation && onSelectCitation(foundCitation)}
-                title={foundCitation ? `${foundCitation.document_name} (${foundCitation.source_uri})` : 'View Citation'}
-                className="inline-flex items-center justify-center px-1.5 py-0.5 mx-0.5 rounded text-[11px] font-bold bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 hover:text-white border border-blue-400/30 transition-all cursor-pointer"
+                title={
+                  foundCitation
+                    ? `${foundCitation.document_name}${pageText ? ` (Page ${pageText})` : ''}\n\nEvidence Excerpt:\n"${foundCitation.snippet}"`
+                    : 'View Citation'
+                }
+                className="inline-flex items-center justify-center px-1.5 py-0.5 mx-0.5 rounded text-[11px] font-bold bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 hover:text-white border border-blue-400/40 transition-all cursor-pointer align-baseline shadow-sm"
               >
-                {part}
+                <span>{part}</span>
+                {pageText && (
+                  <span className="text-[9px] text-amber-300/90 ml-1 font-mono font-medium">
+                    {pageText}
+                  </span>
+                )}
               </button>
+            );
+          }
+          if (part.includes('**')) {
+            const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+            return (
+              <span key={index}>
+                {boldParts.map((bp, bidx) => {
+                  if (bp.startsWith('**') && bp.endsWith('**')) {
+                    return (
+                      <strong key={bidx} className="font-semibold text-slate-100">
+                        {bp.slice(2, -2)}
+                      </strong>
+                    );
+                  }
+                  return bp;
+                })}
+              </span>
             );
           }
           return <span key={index}>{part}</span>;
         })}
-      </span>
+      </>
+    );
+  };
+
+  const renderMessageContent = (text: string, citations?: Citation[]) => {
+    const lines = text.split('\n');
+    return (
+      <div className="space-y-1.5 leading-relaxed">
+        {lines.map((line, lidx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <div key={lidx} className="h-1.5" />;
+          }
+          if (trimmed.startsWith('### ')) {
+            return (
+              <h4 key={lidx} className="font-semibold text-slate-100 text-xs mt-2.5 mb-1 text-blue-200">
+                {renderFormattedInline(trimmed.slice(4), citations)}
+              </h4>
+            );
+          }
+          if (trimmed.startsWith('## ')) {
+            return (
+              <h3 key={lidx} className="font-bold text-slate-100 text-sm mt-3 mb-1 text-blue-100">
+                {renderFormattedInline(trimmed.slice(3), citations)}
+              </h3>
+            );
+          }
+          if (trimmed.startsWith('---')) {
+            return <hr key={lidx} className="border-slate-800 my-2" />;
+          }
+          if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+            return (
+              <div key={lidx} className="flex items-start space-x-1.5 pl-1.5">
+                <span className="text-blue-400 mt-0.5">•</span>
+                <span className="flex-1">{renderFormattedInline(trimmed.slice(2), citations)}</span>
+              </div>
+            );
+          }
+          return (
+            <p key={lidx} className="text-slate-200">
+              {renderFormattedInline(line, citations)}
+            </p>
+          );
+        })}
+      </div>
     );
   };
 
@@ -136,23 +202,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
                 {/* Citations List on Agent Message */}
                 {msg.citations && msg.citations.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-1.5">
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
                     <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider block">
-                      Grounded Sources ({msg.citations.length})
+                      Grounded Sources & Evidence ({msg.citations.length})
                     </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {msg.citations.map((cite) => (
-                        <button
-                          key={cite.citation_index}
-                          onClick={() => onSelectCitation(cite)}
-                          className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 text-[11px] text-slate-300 transition-colors"
-                        >
-                          <span className="text-blue-400 font-bold">[{cite.citation_index}]</span>
-                          <span className="truncate max-w-[140px]">{cite.document_name}</span>
-                          {cite.page_number && <span className="text-slate-400">p.{cite.page_number}</span>}
-                          {cite.signed_url && <ExternalLink className="w-2.5 h-2.5 text-slate-400 ml-0.5" />}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap gap-2">
+                      {msg.citations.map((cite) => {
+                        const pageText = cite.page_range || (cite.page_number ? `${cite.page_number}` : null);
+                        return (
+                          <button
+                            key={cite.citation_index}
+                            onClick={() => onSelectCitation(cite)}
+                            title={`Document: ${cite.document_name}${pageText ? ` (Page ${pageText})` : ''}\n\nEvidence Excerpt:\n"${cite.snippet}"`}
+                            className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 hover:border-blue-500/50 text-[11px] text-slate-200 transition-all shadow-sm group cursor-pointer"
+                          >
+                            <span className="text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                              [{cite.citation_index}]
+                            </span>
+                            <span className="truncate max-w-[150px] font-medium">{cite.document_name}</span>
+                            {pageText && (
+                              <span className="text-amber-300/90 font-medium bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 text-[10px]">
+                                Page {pageText}
+                              </span>
+                            )}
+                            {cite.signed_url && (
+                              <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-300 ml-0.5 transition-colors" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

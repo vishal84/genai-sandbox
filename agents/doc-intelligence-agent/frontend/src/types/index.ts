@@ -3,6 +3,7 @@ export interface Citation {
   document_name: string;
   source_uri: string;
   page_number?: number | null;
+  page_range?: string | null;
   snippet: string;
   signed_url?: string | null;
 }

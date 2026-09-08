@@ -23,6 +23,7 @@ class RagChunk:
     source_uri: str
     document_name: str
     page_number: int | None = None
+    page_range: str | None = None
     signed_url: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -32,8 +33,96 @@ class RagChunk:
             "source_uri": self.source_uri,
             "document_name": self.document_name,
             "page_number": self.page_number,
+            "page_range": self.page_range,
             "signed_url": self.signed_url,
         }
+
+
+STOP_WORDS = {
+    "what", "is", "are", "the", "a", "an", "in", "on", "of", "and", "or", "for", "to",
+    "with", "about", "can", "you", "tell", "me", "how", "why", "which", "do", "does",
+    "did", "from", "at", "by", "this", "that", "these", "those", "it", "its", "be",
+    "been", "being", "have", "has", "had", "as", "their", "there", "were", "was"
+}
+
+
+def extract_relevant_excerpt(query: str, text: str, max_chars: int = 350) -> str:
+    """Extracts a focused textual excerpt from chunk text that is directly relevant to query.
+
+    Splits text into sentences, scores them based on overlap with query terms
+    (filtering out stop words), and selects the highest scoring continuous
+    passage up to max_chars, cleanly formatted.
+    """
+    import re
+
+    cleaned = re.sub(r"\r\n|\r", "\n", text)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) <= max_chars:
+        return cleaned
+
+    query_words = [
+        w.lower()
+        for w in re.findall(r"\b[a-zA-Z0-9_\-]+\b", query)
+        if len(w) >= 3 and w.lower() not in STOP_WORDS
+    ]
+    if not query_words:
+        query_words = [
+            w.lower()
+            for w in re.findall(r"\b[a-zA-Z0-9_\-]+\b", query)
+            if w.lower() not in STOP_WORDS
+        ]
+
+    # Split into sentences or lines
+    raw_sentences = [
+        s.strip()
+        for s in re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+        if s.strip()
+    ]
+    if not raw_sentences:
+        clean_prefix = cleaned[:max_chars]
+        if " " in clean_prefix:
+            return clean_prefix.rsplit(" ", 1)[0] + "..."
+        return clean_prefix + "..."
+
+    # Score each sentence
+    scored_sentences = []
+    for i, s in enumerate(raw_sentences):
+        s_lower = s.lower()
+        score = sum(2 if w in s_lower else 0 for w in query_words)
+        # Bonus for query bigrams
+        for j in range(len(query_words) - 1):
+            if f"{query_words[j]} {query_words[j+1]}" in s_lower:
+                score += 5
+        scored_sentences.append((score, i, s))
+
+    # Sort descending by score, maintaining order for ties
+    scored_sentences.sort(key=lambda x: (x[0], -x[1]), reverse=True)
+    best_score, best_idx, _ = scored_sentences[0]
+
+    if best_score <= 0:
+        best_idx = 0
+
+    # Build window around best sentence up to max_chars
+    selected_indices = [best_idx]
+    current_len = len(raw_sentences[best_idx])
+
+    if best_idx + 1 < len(raw_sentences) and current_len + len(raw_sentences[best_idx + 1]) + 1 <= max_chars:
+        selected_indices.append(best_idx + 1)
+        current_len += len(raw_sentences[best_idx + 1]) + 1
+
+    if best_idx - 1 >= 0 and current_len + len(raw_sentences[best_idx - 1]) + 1 <= max_chars:
+        selected_indices.insert(0, best_idx - 1)
+        current_len += len(raw_sentences[best_idx - 1]) + 1
+
+    excerpt = " ".join(raw_sentences[i] for i in selected_indices)
+    if selected_indices[0] > 0:
+        excerpt = "..." + excerpt
+    if selected_indices[-1] < len(raw_sentences) - 1:
+        excerpt = excerpt + "..."
+
+    return excerpt
 
 
 class VertexRagManager:
@@ -186,8 +275,8 @@ class VertexRagManager:
     def query_corpus(
         self,
         query_text: str,
-        top_k: int = 5,
-        distance_threshold: float = 0.5,
+        top_k: int = 7,
+        distance_threshold: float = 0.8,
         corpus_name: str | None = None,
     ) -> list[RagChunk]:
         """Retrieves top-k relevant chunks from the Vertex AI RAG corpus."""
@@ -215,15 +304,47 @@ class VertexRagManager:
                 text = getattr(ctx, "text", "")
                 score = getattr(ctx, "distance", 0.0)
                 source_uri = getattr(ctx, "source_uri", "") or ""
+                display_name = getattr(ctx, "source_display_name", "") or ""
                 doc_name = (
-                    source_uri.split("/")[-1] if source_uri else "Document"
+                    display_name
+                    or (source_uri.split("/")[-1] if source_uri else "Document")
                 )
 
-                # Attempt to extract page number from metadata or text headers if present
+                # Extract page number and span from Vertex AI RAG chunk.page_span or fallbacks
                 page_number = None
-                metadata = getattr(ctx, "metadata", {}) or {}
-                if isinstance(metadata, dict) and "page_number" in metadata:
-                    page_number = int(metadata["page_number"])
+                page_range = None
+
+                chunk_obj = getattr(ctx, "chunk", None)
+                if chunk_obj:
+                    page_span = getattr(chunk_obj, "page_span", None)
+                    if page_span:
+                        first = getattr(page_span, "first_page", None)
+                        last = getattr(page_span, "last_page", None)
+                        if first is not None and first > 0:
+                            page_number = int(first)
+                            if last is not None and last > first:
+                                page_range = f"{first}-{last}"
+                            else:
+                                page_range = str(first)
+
+                if page_number is None:
+                    metadata = getattr(ctx, "metadata", {}) or {}
+                    if isinstance(metadata, dict) and "page_number" in metadata:
+                        try:
+                            page_number = int(metadata["page_number"])
+                            page_range = str(page_number)
+                        except (ValueError, TypeError):
+                            pass
+
+                if page_number is None:
+                    import re
+                    page_match = re.search(r"(?:\[|\b)(?:page|p\.)\s*(\d+)(?:\]|\b)", text, re.IGNORECASE)
+                    if page_match:
+                        try:
+                            page_number = int(page_match.group(1))
+                            page_range = str(page_number)
+                        except (ValueError, TypeError):
+                            pass
 
                 chunks.append(
                     RagChunk(
@@ -232,6 +353,7 @@ class VertexRagManager:
                         source_uri=source_uri,
                         document_name=doc_name,
                         page_number=page_number,
+                        page_range=page_range,
                     )
                 )
 
