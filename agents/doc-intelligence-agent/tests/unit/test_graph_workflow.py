@@ -52,3 +52,57 @@ def test_ingest_node_validation():
     assert result["status"] == "error"
     assert "No valid gs:// PDF URIs" in result["message"]
 
+
+def test_function_nodes_are_callable():
+    from google.adk.workflow import FunctionNode
+
+    assert isinstance(router_node, FunctionNode)
+    assert isinstance(ingest_node, FunctionNode)
+    assert isinstance(filter_node, FunctionNode)
+    assert callable(router_node)
+    assert callable(ingest_node)
+    assert callable(filter_node)
+
+
+def test_ingest_node_success(monkeypatch):
+    from app.agent import rag_manager
+
+    monkeypatch.setattr(
+        rag_manager,
+        "import_gcs_documents",
+        lambda gcs_uris: {
+            "status": "success",
+            "corpus": "test-corpus",
+            "imported_files_count": len(gcs_uris),
+            "paths": gcs_uris,
+        },
+    )
+
+    state = DocWorkflowState(intent="ingest", gcs_uris=["gs://bucket/sample.pdf"])
+    result = ingest_node(state)
+    assert result["status"] == "success"
+    assert result["imported_files_count"] == 1
+    assert "Successfully submitted 1 document(s)" in state.answer
+
+
+def test_ingest_node_error(monkeypatch):
+    from app.agent import rag_manager
+
+    monkeypatch.setattr(
+        rag_manager,
+        "import_gcs_documents",
+        lambda gcs_uris: {
+            "status": "error",
+            "corpus": "test-corpus",
+            "error": "Permission denied accessing bucket",
+            "paths": gcs_uris,
+        },
+    )
+
+    state = DocWorkflowState(intent="ingest", gcs_uris=["gs://bucket/sample.pdf"])
+    result = ingest_node(state)
+    assert result["status"] == "error"
+    assert result["imported_files_count"] == 0
+    assert "Ingestion failed: Permission denied accessing bucket" in state.answer
+
+
