@@ -171,7 +171,7 @@ async def ingest_endpoint(request: IngestRequest) -> IngestResponse:
 
     return IngestResponse(
         status=result.get("status", "success"),
-        imported_files_count=result.get("imported_files_count", len(request.gcs_uris)),
+        imported_files_count=result.get("imported_files_count", 0 if result.get("status") == "error" else len(request.gcs_uris)),
         corpus=result.get("corpus"),
         paths=request.gcs_uris,
         message=state.answer,

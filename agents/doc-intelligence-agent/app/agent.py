@@ -21,9 +21,21 @@ from google.adk.workflow import (
     DEFAULT_ROUTE,
     START,
     Edge,
+    FunctionNode,
     Workflow,
     node,
 )
+
+# Ensure FunctionNode instances are directly callable as functions
+if "__call__" not in FunctionNode.__dict__:
+    def _function_node_call(self, *args, **kwargs):
+        func = getattr(self, "_func", None)
+        if callable(func):
+            return func(*args, **kwargs)
+        raise TypeError(f"FunctionNode '{self.name}' has no underlying callable function.")
+
+    FunctionNode.__call__ = _function_node_call
+
 from google.genai import Client as GenAiClient
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -90,8 +102,12 @@ def ingest_node(state: DocWorkflowState) -> dict[str, Any]:
 
     result = rag_manager.import_gcs_documents(gcs_uris=uris)
     state.ingest_result = result
-    count = result.get("imported_files_count", len(uris))
-    state.answer = f"Successfully submitted {count} document(s) for ingestion into Vertex AI RAG."
+    if result.get("status") == "error":
+        result.setdefault("imported_files_count", 0)
+        state.answer = f"Ingestion failed: {result.get('error', 'Unknown error')}"
+    else:
+        count = result.get("imported_files_count", len(uris))
+        state.answer = f"Successfully submitted {count} document(s) for ingestion into Vertex AI RAG."
     return result
 
 
