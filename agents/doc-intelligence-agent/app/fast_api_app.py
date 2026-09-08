@@ -82,12 +82,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         task_store=InMemoryTaskStore(),
         rpc_path=f"/a2a/{adk_app.name}",
     )
+
+    # Mount compiled React frontend static files as fallback after all API & A2A routes
+    if os.path.isdir(STATIC_DIR):
+        app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            file_path = os.path.join(STATIC_DIR, full_path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+            return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
     yield
 
 
 app: FastAPI = get_fast_api_app(
     agents_dir=AGENT_DIR,
-    web=True,
+    web=False,
     artifact_service_uri=services.ARTIFACT_SERVICE_URI,
     allow_origins=allow_origins,
     session_service_uri=services.SESSION_SERVICE_URI,
@@ -176,6 +188,19 @@ async def list_documents_endpoint():
         return {"documents": [], "warning": str(e)}
 
 
+@app.get("/api/status")
+async def api_status_endpoint():
+    """Returns runtime health and configuration metadata."""
+    return {
+        "status": "online",
+        "agent": "doc-intelligence-agent",
+        "project": rag_manager.project_id,
+        "rag_location": rag_manager.location,
+        "corpus_id": rag_manager.corpus_id,
+        "bucket": os.getenv("GCS_BUCKET_NAME", ""),
+    }
+
+
 @app.post("/feedback")
 def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """Collects and logs analyst feedback."""
@@ -185,19 +210,6 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     except Exception:
         pass
     return {"status": "success"}
-
-
-# Mount compiled React frontend static files if present
-if os.path.isdir(STATIC_DIR):
-    app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        # Serve index.html for client-side routing unless a static file exists
-        file_path = os.path.join(STATIC_DIR, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 if __name__ == "__main__":
