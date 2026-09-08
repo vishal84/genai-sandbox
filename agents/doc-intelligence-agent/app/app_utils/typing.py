@@ -13,6 +13,7 @@ class Citation(BaseModel):
     document_name: str = Field(..., description="Filename or title of the cited document")
     source_uri: str = Field(..., description="Original gs:// URI of the source PDF")
     page_number: int | None = Field(None, description="Page number where content appears if identified")
+    page_range: str | None = Field(None, description="Formatted page or page span (e.g. '6' or '6-7')")
     snippet: str = Field(..., description="Exact textual excerpt supporting the statement")
     signed_url: str | None = Field(None, description="Direct signed download/view link")
 

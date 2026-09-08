@@ -41,7 +41,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.app_utils.typing import Citation
-from app.rag.corpus_manager import RagChunk, VertexRagManager
+from app.rag.corpus_manager import RagChunk, VertexRagManager, extract_relevant_excerpt
 from app.rag.signed_urls import generate_gcs_signed_url
 
 logger = logging.getLogger(__name__)
@@ -151,14 +151,14 @@ def filter_node(state: DocWorkflowState) -> list[dict[str, Any]]:
 
 @node(name="synthesize_node")
 def synthesize_node(state: DocWorkflowState) -> str:
-    """Synthesizes a short, concise grounded answer with citations and signed URLs."""
+    """Synthesizes an accurate, grounded analyst answer with evidence excerpts and page citations."""
     if not state.filtered_chunks:
         answer = "I could not find any relevant information in the ingested documents to answer your question."
         state.answer = answer
         state.citations = []
         return answer
 
-    # Build context string with numbered references
+    # Build context string with numbered references and extracted excerpts
     context_sections = []
     citation_map: dict[int, dict[str, Any]] = {}
 
@@ -166,37 +166,49 @@ def synthesize_node(state: DocWorkflowState) -> str:
         doc_name = chunk.get("document_name", f"Doc-{idx}")
         source_uri = chunk.get("source_uri", "")
         page_num = chunk.get("page_number")
+        page_range = chunk.get("page_range")
         text = chunk.get("text", "")
 
         signed_url = generate_gcs_signed_url(source_uri) if source_uri else None
+        page_display = page_range or (str(page_num) if page_num else None)
+
+        snippet = extract_relevant_excerpt(state.query, text, max_chars=350)
 
         citation_info = {
             "citation_index": idx,
             "document_name": doc_name,
             "source_uri": source_uri,
             "page_number": page_num,
-            "snippet": text[:200] + ("..." if len(text) > 200 else ""),
+            "page_range": page_display,
+            "snippet": snippet,
             "signed_url": signed_url,
         }
         citation_map[idx] = citation_info
 
-        page_str = f" (Page {page_num})" if page_num else ""
-        context_sections.append(f"[{idx}] Source: {doc_name}{page_str}\n{text}")
+        page_str = f" (Page {page_display})" if page_display else ""
+        context_sections.append(
+            f"[{idx}] Source Document: {doc_name}{page_str}\n"
+            f"Relevant Evidence Excerpt: \"{snippet}\"\n"
+            f"Full Chunk Text:\n{text}"
+        )
 
     context_str = "\n\n".join(context_sections)
 
-    synthesis_prompt = f"""You are a precise document analyst. Answer the user query based ONLY on the provided context excerpts.
-Rules:
-1. Be short, concise, and direct (maximum 3-4 sentences).
-2. Every factual claim MUST include inline citations in square brackets matching the context source numbers, e.g., [1] or [1][2].
-3. If the context does not contain the answer, state that clearly. Do NOT assume or hallucinate external knowledge.
+    synthesis_prompt = f"""You are an expert Document Intelligence Analyst. Answer the user's research query accurately and comprehensively using ONLY the provided document excerpts.
 
-Context:
+Instructions:
+1. Provide a direct, well-structured, and factual explanation answering the query.
+2. Every factual statement MUST cite the source using inline brackets corresponding to the source number, e.g. [1] or [1][2].
+3. When referencing evidence from a specific page, cite the page number as indicated in the source headers (e.g., "[1] (Page 7)").
+4. Incorporate or quote relevant excerpts from the document to highlight and prove your answer.
+5. If the provided context does not contain sufficient information to answer the question, state clearly that the ingested documents do not contain this information. Do NOT hallucinate or extrapolate outside the provided context.
+
+Context Sources:
 {context_str}
 
 User Query: {state.query}
 
-Concise Grounded Answer:"""
+Grounded Analyst Answer:"""
 
     try:
         project = os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -206,15 +218,20 @@ Concise Grounded Answer:"""
             model="gemini-3.8-flash",
             contents=synthesis_prompt,
             config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=350,
+                temperature=0.2,
+                max_output_tokens=1500,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
         answer = (response.text or "").strip()
     except Exception as e:
         logger.warning("Synthesis LLM call failed (%s); providing extractive summary fallback.", e)
         top_chunk = state.filtered_chunks[0]
-        answer = f"Based on {top_chunk.get('document_name', 'document')} [1]: {top_chunk.get('text', '')[:250]}..."
+        top_doc = top_chunk.get("document_name", "document")
+        top_page = top_chunk.get("page_range") or top_chunk.get("page_number")
+        page_ref = f" (Page {top_page})" if top_page else ""
+        top_excerpt = extract_relevant_excerpt(state.query, top_chunk.get("text", ""), max_chars=300)
+        answer = f"Based on {top_doc}{page_ref} [1]: \"{top_excerpt}\""
 
     # Detect which citations were actually referenced in the answer
     used_citations = []
@@ -284,9 +301,11 @@ def query_doc_intelligence_tool(analyst_query: str) -> str:
 
     citation_summary = []
     for c in state.citations:
-        page_str = f" p.{c['page_number']}" if c.get("page_number") else ""
+        page_val = c.get("page_range") or c.get("page_number")
+        page_str = f" (Page {page_val})" if page_val else ""
         link_str = f" ({c['signed_url']})" if c.get("signed_url") else ""
-        citation_summary.append(f"[{c['citation_index']}] {c['document_name']}{page_str}{link_str}")
+        snippet_str = f"\n   Evidence: \"{c['snippet']}\"" if c.get("snippet") else ""
+        citation_summary.append(f"[{c['citation_index']}] {c['document_name']}{page_str}{link_str}{snippet_str}")
 
     citations_text = "\n".join(citation_summary)
     if citations_text:

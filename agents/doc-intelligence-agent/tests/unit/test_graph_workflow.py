@@ -106,3 +106,38 @@ def test_ingest_node_error(monkeypatch):
     assert "Ingestion failed: Permission denied accessing bucket" in state.answer
 
 
+def test_synthesize_node_citations_and_excerpts(monkeypatch):
+    from unittest.mock import MagicMock
+    from app.agent import synthesize_node
+
+    class MockResponse:
+        text = "Span-based masking masks contiguous spans of tokens [1]."
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = MockResponse()
+
+    monkeypatch.setattr("app.agent.GenAiClient", lambda **kwargs: mock_client)
+
+    state = DocWorkflowState(
+        query="What is span masking?",
+        filtered_chunks=[
+            {
+                "text": "Span-based masking replaces sequences of words with mask tokens.",
+                "score": 0.15,
+                "document_name": "11.pdf",
+                "source_uri": "gs://bucket/11.pdf",
+                "page_number": 7,
+                "page_range": "6-7",
+            }
+        ],
+    )
+    answer = synthesize_node(state)
+    assert "[1]" in answer
+    assert len(state.citations) == 1
+    assert state.citations[0]["citation_index"] == 1
+    assert state.citations[0]["page_range"] == "6-7"
+    assert state.citations[0]["page_number"] == 7
+    assert "Span-based masking" in state.citations[0]["snippet"]
+
+
+

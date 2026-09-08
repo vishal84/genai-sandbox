@@ -31,11 +31,16 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({ citation, onClos
 
       <div className="flex-1 overflow-y-auto py-4 space-y-5">
         <div>
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-            Grounded Excerpt
-          </label>
-          <div className="bg-slate-900/80 p-3.5 rounded-lg border border-slate-700/60 text-slate-200 text-xs leading-relaxed font-mono">
-            "{citation.snippet}"
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              Grounded Evidence Excerpt
+            </label>
+            <span className="text-[10px] text-blue-400 font-medium">
+              Evidence from {citation.page_range ? `Page ${citation.page_range}` : (citation.page_number ? `Page ${citation.page_number}` : 'Source')}
+            </span>
+          </div>
+          <div className="bg-slate-900/90 p-4 rounded-xl border border-blue-500/30 text-slate-100 text-xs leading-relaxed font-sans shadow-inner relative">
+            <p className="italic font-normal">"{citation.snippet}"</p>
           </div>
         </div>
 
@@ -46,9 +51,9 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({ citation, onClos
           </div>
 
           <div className="flex justify-between py-1.5 border-b border-slate-700/40">
-            <span className="text-slate-400">Location</span>
-            <span className="text-blue-400 font-medium">
-              {citation.page_number ? `Page ${citation.page_number}` : 'Indexed Section'}
+            <span className="text-slate-400">Page Reference</span>
+            <span className="text-amber-300 font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              {citation.page_range ? `Page ${citation.page_range}` : (citation.page_number ? `Page ${citation.page_number}` : 'Indexed Section')}
             </span>
           </div>
 

@@ -139,6 +139,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
             document_name=c.get("document_name", "Document"),
             source_uri=c.get("source_uri", ""),
             page_number=c.get("page_number"),
+            page_range=c.get("page_range"),
             snippet=c.get("snippet", ""),
             signed_url=c.get("signed_url"),
         )
