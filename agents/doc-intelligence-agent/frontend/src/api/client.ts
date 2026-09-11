@@ -37,6 +37,21 @@ export async function ingestDocuments(gcsUris: string[]): Promise<IngestResult> 
   return response.json();
 }
 
+export async function ingestFolder(folderUri: string): Promise<IngestResult> {
+  const response = await fetch(`${API_BASE}/ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_uri: folderUri }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: 'Folder ingestion failed' }));
+    throw new Error(err.detail || `HTTP Error ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function fetchIndexedDocuments(): Promise<DocumentMetadata[]> {
   try {
     const response = await fetch(`${API_BASE}/documents`);

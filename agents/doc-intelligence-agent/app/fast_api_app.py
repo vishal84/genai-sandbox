@@ -150,7 +150,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
         answer=state.answer,
         citations=citations,
         session_id=request.session_id,
-        raw_chunks=state.filtered_chunks,
+        raw_chunks=state.filtered_chunks if (state.is_grounded and citations) else [],
     )
 
 
@@ -159,22 +159,60 @@ async def ingest_endpoint(request: IngestRequest) -> IngestResponse:
     """Executes the ingestion branch of the ADK graph workflow.
 
     Imports GCS PDF documents into the Vertex AI RAG corpus using layout-aware parsing.
+    Supports either individual file URIs or bulk folder ingestion.
     """
-    if not request.gcs_uris:
-        raise HTTPException(status_code=400, detail="At least one GCS URI must be provided.")
+    folder_uri = request.folder_uri.strip() if request.folder_uri else None
+    gcs_uris = [u.strip() for u in request.gcs_uris if u.strip()]
 
-    for uri in request.gcs_uris:
+    if not folder_uri and not gcs_uris:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one GCS URI must be provided (or folder_uri for bulk ingestion).",
+        )
+
+    if folder_uri:
+        if not folder_uri.startswith("gs://"):
+            raise HTTPException(status_code=400, detail=f"Invalid folder URI '{folder_uri}': must start with gs://")
+
+        path_part = folder_uri[5:].strip("/")
+        parts = path_part.split("/", 1)
+        if len(parts) < 2 or not parts[1].strip("/"):
+            raise HTTPException(
+                status_code=400,
+                detail="When ingesting all, a folder path must be provided (e.g., gs://bucket-name/folder/). A bucket root alone is not permitted.",
+            )
+
+        if parts[1].strip("/").lower().endswith((".pdf", ".txt", ".docx", ".html", ".md")):
+            raise HTTPException(
+                status_code=400,
+                detail=f"A folder path must be provided when ingesting all, not a single file URI ('{folder_uri}'). For single files, use file ingestion.",
+            )
+
+        norm_folder_uri = f"gs://{parts[0]}/{parts[1].strip('/')}/"
+        state = DocWorkflowState(intent="ingest", folder_uri=norm_folder_uri)
+        result = ingest_node(state)
+
+        return IngestResponse(
+            status=result.get("status", "success"),
+            imported_files_count=result.get("imported_files_count", 0 if result.get("status") == "error" else 1),
+            corpus=result.get("corpus"),
+            paths=result.get("paths", [norm_folder_uri]),
+            folder_uri=norm_folder_uri,
+            message=state.answer,
+        )
+
+    for uri in gcs_uris:
         if not uri.startswith("gs://"):
             raise HTTPException(status_code=400, detail=f"Invalid URI '{uri}': must start with gs://")
 
-    state = DocWorkflowState(intent="ingest", gcs_uris=request.gcs_uris)
+    state = DocWorkflowState(intent="ingest", gcs_uris=gcs_uris)
     result = ingest_node(state)
 
     return IngestResponse(
         status=result.get("status", "success"),
-        imported_files_count=result.get("imported_files_count", 0 if result.get("status") == "error" else len(request.gcs_uris)),
+        imported_files_count=result.get("imported_files_count", 0 if result.get("status") == "error" else len(gcs_uris)),
         corpus=result.get("corpus"),
-        paths=request.gcs_uris,
+        paths=gcs_uris,
         message=state.answer,
     )
 

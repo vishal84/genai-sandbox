@@ -37,7 +37,8 @@ class ChatResponse(BaseModel):
 class IngestRequest(BaseModel):
     """Document ingestion request."""
 
-    gcs_uris: list[str] = Field(..., description="List of gs:// paths to PDF documents")
+    gcs_uris: list[str] = Field(default_factory=list, description="List of gs:// paths to PDF documents")
+    folder_uri: str | None = Field(default=None, description="GCS folder path to ingest all documents from (e.g. gs://bucket/folder/)")
     chunk_size: int = Field(512, description="Target chunk size in tokens/characters")
     chunk_overlap: int = Field(100, description="Chunk overlap")
 
@@ -49,6 +50,7 @@ class IngestResponse(BaseModel):
     imported_files_count: int
     corpus: str | None = None
     paths: list[str] = Field(default_factory=list)
+    folder_uri: str | None = Field(default=None, description="GCS folder path if folder ingestion was used")
     message: str | None = None
 
 

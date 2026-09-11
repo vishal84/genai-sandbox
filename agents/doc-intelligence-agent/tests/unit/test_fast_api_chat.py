@@ -57,3 +57,40 @@ def test_chat_endpoint_empty_message():
     response = client.post("/api/chat", json={"message": ""})
     assert response.status_code == 400
     assert "Query message cannot be empty" in response.json()["detail"]
+
+
+def test_chat_endpoint_no_matching_data(monkeypatch):
+    client = TestClient(app)
+
+    def mock_retrieve(state):
+        state.retrieved_chunks = [
+            {
+                "text": "Irrelevant text about word2vec.",
+                "score": 0.7,
+                "document_name": "1301.3781.pdf",
+            }
+        ]
+
+    def mock_filter(state):
+        state.filtered_chunks = state.retrieved_chunks
+        state.is_grounded = False
+        return state.filtered_chunks
+
+    def mock_synthesize(state):
+        state.answer = (
+            "Based on the provided documents, there is no mention or information "
+            "regarding the course 'CS224 taught at stanford.' The ingested documents do not contain this information."
+        )
+        state.citations = []
+        state.is_grounded = False
+
+    monkeypatch.setattr(api_module, "retrieve_node", mock_retrieve)
+    monkeypatch.setattr(api_module, "filter_node", mock_filter)
+    monkeypatch.setattr(api_module, "synthesize_node", mock_synthesize)
+
+    response = client.post("/api/chat", json={"message": "CS224 taught at stanford."})
+    assert response.status_code == 200
+    data = response.json()
+    assert "no mention or information regarding" in data["answer"]
+    assert data["citations"] == []
+    assert data["raw_chunks"] == []

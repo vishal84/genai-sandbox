@@ -233,6 +233,7 @@ class VertexRagManager:
         """Imports PDF documents from GCS into the Vertex AI RAG corpus.
 
         Uses layout-aware parsing and chunking to preserve section structure.
+        Automatically batches requests in chunks of at most 25 to respect Vertex AI limits.
         """
         self._ensure_initialized()
         from vertexai.preview import rag
@@ -249,28 +250,183 @@ class VertexRagManager:
 
         logger.info("Importing %d URIs into corpus %s: %s", len(gcs_uris), corpus, gcs_uris)
 
-        try:
-            response = rag.import_files(
-                corpus_name=corpus,
-                paths=gcs_uris,
-                transformation_config=transformation_config,
-                max_embedding_requests_per_min=1000,
-            )
-            imported_count = getattr(response, "imported_rag_files_count", len(gcs_uris))
-            return {
-                "status": "success",
-                "corpus": corpus,
-                "imported_files_count": imported_count,
-                "paths": gcs_uris,
-            }
-        except Exception as e:
-            logger.error("Failed to import files into Vertex AI RAG: %s", e)
+        MAX_BATCH_SIZE = 25
+        batches = [gcs_uris[i : i + MAX_BATCH_SIZE] for i in range(0, len(gcs_uris), MAX_BATCH_SIZE)]
+        total_imported = 0
+        errors = []
+
+        for batch_idx, batch in enumerate(batches):
+            try:
+                response = rag.import_files(
+                    corpus_name=corpus,
+                    paths=batch,
+                    transformation_config=transformation_config,
+                    max_embedding_requests_per_min=1000,
+                )
+                imported_count = getattr(response, "imported_rag_files_count", len(batch))
+                total_imported += imported_count
+            except Exception as e:
+                logger.error(
+                    "Failed to import batch %d of %d (%d URIs) into Vertex AI RAG: %s",
+                    batch_idx + 1,
+                    len(batches),
+                    len(batch),
+                    e,
+                )
+                errors.append(str(e))
+
+        if errors and total_imported == 0:
             return {
                 "status": "error",
                 "corpus": corpus,
-                "error": str(e),
+                "error": "; ".join(errors),
                 "paths": gcs_uris,
+                "imported_files_count": 0,
             }
+
+        result: dict[str, Any] = {
+            "status": "success" if not errors else "partial_success",
+            "corpus": corpus,
+            "imported_files_count": total_imported,
+            "paths": gcs_uris,
+        }
+        if errors:
+            result["warning"] = f"Some batches failed: {'; '.join(errors)}"
+        return result
+
+    @staticmethod
+    def parse_gcs_uri(uri: str) -> tuple[str, str]:
+        """Parses a gs:// URI into (bucket_name, prefix)."""
+        if not uri or not uri.startswith("gs://"):
+            return "", ""
+        path_part = uri[5:]
+        if "/" not in path_part:
+            return path_part, ""
+        bucket, prefix = path_part.split("/", 1)
+        return bucket, prefix
+
+    def list_gcs_folder_files(self, folder_uri: str) -> tuple[list[str], str | None]:
+        """Lists document files from a GCS folder URI using the Cloud Storage client.
+
+        Returns:
+            A tuple of (matching_uris, error_message).
+        """
+        bucket_name, prefix = self.parse_gcs_uri(folder_uri)
+        if not bucket_name or not prefix:
+            return [], "Invalid GCS folder URI"
+
+        norm_prefix = prefix.strip("/") + "/"
+        try:
+            from google.cloud import storage
+
+            client = storage.Client(project=self.project_id)
+            bucket = client.bucket(bucket_name)
+            blobs = bucket.list_blobs(prefix=norm_prefix)
+            supported_exts = (".pdf", ".txt", ".docx", ".html", ".md")
+            uris = [
+                f"gs://{bucket_name}/{blob.name}"
+                for blob in blobs
+                if not blob.name.endswith("/") and blob.name.lower().endswith(supported_exts)
+            ]
+            return uris, None
+        except Exception as e:
+            logger.warning("Could not list GCS folder files via storage client: %s", e)
+            return [], str(e)
+
+    def import_gcs_folder(
+        self,
+        folder_uri: str,
+        chunk_size: int = 512,
+        chunk_overlap: int = 100,
+        corpus_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Imports all documents from a GCS folder path into the Vertex AI RAG corpus.
+
+        Enforces that a folder path within the bucket is provided.
+        """
+        clean_uri = folder_uri.strip() if folder_uri else ""
+        if not clean_uri.startswith("gs://"):
+            return {
+                "status": "error",
+                "error": "Folder URI must start with gs://",
+                "message": "When ingesting all, a valid GCS folder path starting with gs:// must be provided (e.g. gs://bucket-name/folder/).",
+                "imported_files_count": 0,
+                "folder_uri": clean_uri,
+            }
+
+        bucket_name, prefix = self.parse_gcs_uri(clean_uri)
+        if not bucket_name or not prefix.strip("/"):
+            return {
+                "status": "error",
+                "error": "Folder path must be provided",
+                "message": "When ingesting all, a folder path must be provided (e.g., gs://bucket-name/folder/). A bucket root alone is not permitted.",
+                "imported_files_count": 0,
+                "folder_uri": clean_uri,
+            }
+
+        if prefix.strip("/").lower().endswith((".pdf", ".txt", ".docx", ".html", ".md")):
+            return {
+                "status": "error",
+                "error": "Single file URI provided instead of folder",
+                "message": "A folder path must be provided when ingesting all, not a single file URI (e.g., gs://bucket-name/folder/). For single files, use single file ingestion.",
+                "imported_files_count": 0,
+                "folder_uri": clean_uri,
+            }
+
+        norm_prefix = prefix.strip("/") + "/"
+        norm_folder_uri = f"gs://{bucket_name}/{norm_prefix}"
+
+        # Check if folder has documents via GCS listing if available
+        discovered_files, list_err = self.list_gcs_folder_files(norm_folder_uri)
+        if list_err is None and len(discovered_files) == 0:
+            logger.info("No documents found in folder %s via GCS listing", norm_folder_uri)
+            return {
+                "status": "error",
+                "error": f"No supported documents found in folder '{norm_folder_uri}'.",
+                "message": f"No supported documents found in folder '{norm_folder_uri}'.",
+                "imported_files_count": 0,
+                "folder_uri": norm_folder_uri,
+            }
+
+        # Submitting folder path directly is the Google Vertex AI RAG recommended approach
+        # for directory ingestion to avoid hitting the 25 individual GCS URIs limit.
+        logger.info("Submitting folder path directly to Vertex AI RAG: %s", norm_folder_uri)
+        res = self.import_gcs_documents(
+            gcs_uris=[norm_folder_uri],
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            corpus_name=corpus_name,
+        )
+        res["folder_uri"] = norm_folder_uri
+
+        # If direct folder import failed but we discovered individual files, fall back to batched file import
+        if res.get("status") == "error" and discovered_files:
+            logger.info(
+                "Direct folder import failed (%s); falling back to batched file import for %d files",
+                res.get("error"),
+                len(discovered_files),
+            )
+            res = self.import_gcs_documents(
+                gcs_uris=discovered_files,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                corpus_name=corpus_name,
+            )
+            res["folder_uri"] = norm_folder_uri
+
+        if discovered_files:
+            res["discovered_files"] = discovered_files
+            count = res.get("imported_files_count")
+            if not count or count == 1:
+                res["imported_files_count"] = len(discovered_files)
+            if res.get("status") in ("success", "partial_success"):
+                res["message"] = (
+                    f"Successfully submitted folder '{norm_folder_uri}' ({len(discovered_files)} document(s)) for ingestion into Vertex AI RAG."
+                )
+        elif res.get("status") in ("success", "partial_success"):
+            res["message"] = f"Successfully submitted folder '{norm_folder_uri}' for ingestion into Vertex AI RAG."
+
+        return res
 
     def query_corpus(
         self,

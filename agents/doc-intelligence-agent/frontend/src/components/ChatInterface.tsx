@@ -39,16 +39,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           if (match) {
             const citeIdx = parseInt(match[1], 10);
             const foundCitation = citations?.find((c) => c.citation_index === citeIdx);
-            const pageText = foundCitation?.page_range || (foundCitation?.page_number ? `p.${foundCitation.page_number}` : '');
+            if (!foundCitation) {
+              return <span key={index}>{part}</span>;
+            }
+            const pageText = foundCitation.page_range || (foundCitation.page_number ? `p.${foundCitation.page_number}` : '');
             return (
               <button
                 key={index}
-                onClick={() => foundCitation && onSelectCitation(foundCitation)}
-                title={
-                  foundCitation
-                    ? `${foundCitation.document_name}${pageText ? ` (Page ${pageText})` : ''}\n\nEvidence Excerpt:\n"${foundCitation.snippet}"`
-                    : 'View Citation'
-                }
+                onClick={() => onSelectCitation(foundCitation)}
+                title={`${foundCitation.document_name}${pageText ? ` (Page ${pageText})` : ''}\n\nEvidence Excerpt:\n"${foundCitation.snippet}"`}
                 className="inline-flex items-center justify-center px-1.5 py-0.5 mx-0.5 rounded text-[11px] font-bold bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 hover:text-white border border-blue-400/40 transition-all cursor-pointer align-baseline shadow-sm"
               >
                 <span>{part}</span>
