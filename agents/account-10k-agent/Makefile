@@ -15,7 +15,7 @@ export GOOGLE_GENAI_USE_VERTEXAI ?= true
 PROJECT_ID ?= $(if $(GOOGLE_CLOUD_PROJECT),$(GOOGLE_CLOUD_PROJECT),mongo-experiments)
 LOCATION ?= $(if $(GOOGLE_CLOUD_LOCATION),$(GOOGLE_CLOUD_LOCATION),global)
 STORAGE_REGION ?= us-central1
-RAG_LOCATION ?= $(if $(RAG_LOCATION),$(RAG_LOCATION),us-east5)
+RAG_LOCATION ?= $(if $(RAG_LOCATION),$(RAG_LOCATION),us-central1)
 RAG_DISPLAY_NAME ?= $(if $(RAG_CORPUS_DISPLAY_NAME),$(RAG_CORPUS_DISPLAY_NAME),account-10k-corpus)
 TF_DIR := terraform
 
@@ -24,6 +24,12 @@ help: ## Show this help message
 	@echo "Account 10-K Intelligence Agent - Infrastructure & App Lifecycle"
 	@echo "================================================================"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+.PHONY: switch-serverless
+switch-serverless: ## Switch Vertex AI RAG Engine to Serverless mode (no hourly Spanner billing)
+	@uv run python scripts/manage_rag_corpus.py switch-serverless \
+		--project=$(PROJECT_ID) \
+		--location=$(RAG_LOCATION)
 
 .PHONY: up provision
 up: provision ## Alias for provision

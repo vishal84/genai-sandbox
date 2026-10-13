@@ -105,9 +105,89 @@ def cmd_create(args: argparse.Namespace) -> None:
             "display_name": corpus.display_name,
         }))
     except Exception as e:
+        err_msg = str(e).lower()
+        if "unprovisioned" in err_msg or "serverless" in err_msg or "failedprecondition" in err_msg:
+            print(f"⚠️ Detected unprovisioned Spanner RAG state. Automatically switching projects/{args.project}/locations/{args.location} to Serverless mode...", file=sys.stderr)
+            cmd_switch_serverless(args)
+            print("🔄 Retrying corpus creation in Serverless mode...", file=sys.stderr)
+            try:
+                corpus = rag.create_corpus(
+                    display_name=display_name,
+                    description="SEC 10-K Account Intelligence RAG corpus on Vertex AI",
+                    embedding_model_config=rag.EmbeddingModelConfig(
+                        publisher_model=args.embedding_model
+                    ),
+                )
+                corpus_id = corpus.name.split("/")[-1]
+                print(json.dumps({
+                    "status": "created",
+                    "corpus_id": corpus_id,
+                    "corpus_name": corpus.name,
+                    "display_name": corpus.display_name,
+                }))
+                return
+            except Exception as retry_err:
+                print(f"❌ Retry after switching to Serverless failed: {retry_err}", file=sys.stderr)
+                sys.exit(1)
+
         print(f"❌ Failed to create RAG corpus: {e}", file=sys.stderr)
         sys.exit(1)
 
+def cmd_switch_serverless(args: argparse.Namespace) -> None:
+    """Switches project RagEngineConfig to Serverless mode to resolve unprovisioned Spanner state."""
+    project = args.project
+    location = args.location
+    print(f"🔄 Switching RAG Engine in projects/{project}/locations/{location} to Serverless mode...")
+
+    # Attempt 1: Via Vertex AI Python SDK
+    try:
+        import vertexai
+        from vertexai.preview import rag
+
+        vertexai.init(project=project, location=location)
+        config_name = f"projects/{project}/locations/{location}/ragEngineConfig"
+        if hasattr(rag, "Serverless") and hasattr(rag, "RagManagedDbConfig"):
+            new_config = rag.RagEngineConfig(
+                name=config_name,
+                rag_managed_db_config=rag.RagManagedDbConfig(mode=rag.Serverless()),
+            )
+            rag.rag_data.update_rag_engine_config(rag_engine_config=new_config)
+            print("✅ Successfully switched to Serverless mode via Vertex AI SDK!")
+            return
+    except Exception as e:
+        print(f"⚠️ SDK update attempt returned: {e}. Trying REST API fallback...", file=sys.stderr)
+
+    # Attempt 2: Via Google Cloud REST API with ADC
+    try:
+        import json
+        import urllib.request
+        import google.auth
+        import google.auth.transport.requests
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+
+        url = f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/ragEngineConfig"
+        payload = json.dumps({"ragManagedDbConfig": {"serverless": {}}}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            print(f"✅ Successfully switched to Serverless mode via REST API: {data}")
+            return
+    except Exception as e:
+        print(f"❌ Failed to switch to Serverless mode: {e}", file=sys.stderr)
+        sys.exit(1)
 
 def cmd_delete(args: argparse.Namespace) -> None:
     """Deletes a Vertex AI RAG Corpus by ID or display name."""
@@ -207,6 +287,12 @@ def main() -> None:
     p_create.add_argument("--display-name", default="account-10k-corpus")
     p_create.add_argument("--embedding-model", default="publishers/google/models/text-embedding-005")
     p_create.set_defaults(func=cmd_create)
+
+    p_switch = subparsers.add_parser("switch-serverless", help="Switch project RAG Engine to Serverless mode")
+    p_switch.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
+    p_switch.add_argument("--location", default=default_rag_location)
+    p_switch.set_defaults(func=cmd_switch_serverless)
+
 
     p_del = subparsers.add_parser("delete", help="Delete Vertex AI RAG Corpus")
     p_del.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
