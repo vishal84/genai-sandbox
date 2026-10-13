@@ -845,30 +845,13 @@ def synthesize_node(state: Account10KWorkflowState) -> dict[str, Any]:
 # =====================================================================
 account_10k_workflow = Workflow(
     name="account_10k_rag_workflow",
-    description=(
-        "ADK 2.0 Graph workflow that ingests SEC Form 10-K filings into Vertex AI RAG, "
-        "extracts structured financial health & account recommendations, and answers grounded analyst questions."
-    ),
-    state_schema=Account10KWorkflowState,
     edges=[
-        Edge(source=START, target=router_node),
-        Edge(
-            source=router_node,
-            target=ingest_node,
-            condition=lambda state: getattr(state, "action", "query") == "ingest",
-        ),
-        Edge(
-            source=router_node,
-            target=analyze_10k_node,
-            condition=lambda state: getattr(state, "action", "query") == "analyze",
-        ),
-        Edge(
-            source=router_node,
-            target=retrieve_node,
-            condition=lambda state: getattr(state, "action", "query") == "query",
-        ),
-        Edge(source=retrieve_node, target=filter_node),
-        Edge(source=filter_node, target=synthesize_node),
+        Edge(from_node=START, to_node=router_node),
+        Edge(from_node=router_node, to_node=ingest_node, route="ingest"),
+        Edge(from_node=router_node, to_node=analyze_10k_node, route="analyze"),
+        Edge(from_node=router_node, to_node=retrieve_node, route="query"),
+        Edge(from_node=retrieve_node, to_node=filter_node),
+        Edge(from_node=filter_node, to_node=synthesize_node),
     ],
 )
 
