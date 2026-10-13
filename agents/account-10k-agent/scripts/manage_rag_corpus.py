@@ -189,6 +189,99 @@ def cmd_switch_serverless(args: argparse.Namespace) -> None:
         print(f"❌ Failed to switch to Serverless mode: {e}", file=sys.stderr)
         sys.exit(1)
 
+
+def cmd_get_config(args: argparse.Namespace) -> None:
+    """Retrieves and prints the active RagEngineConfig for project/location."""
+    project = args.project
+    location = args.location
+    try:
+        import json
+        import urllib.request
+        import google.auth
+        import google.auth.transport.requests
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+
+        url = f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/ragEngineConfig"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            print(json.dumps(data, indent=2))
+            return
+    except Exception as e:
+        print(f"❌ Failed to fetch RagEngineConfig: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_switch_spanner_basic(args: argparse.Namespace) -> None:
+    """Updates RagEngineConfig to Spanner Basic tier (100 processing units)."""
+    project = args.project
+    location = args.location
+    print(f"🔄 Setting Spanner Basic tier in projects/{project}/locations/{location}...")
+    # Attempt 1: Via Vertex AI Python SDK
+    try:
+        import vertexai
+        from vertexai.preview import rag
+
+        vertexai.init(project=project, location=location)
+        config_name = f"projects/{project}/locations/{location}/ragEngineConfig"
+        if hasattr(rag, "Spanner") and hasattr(rag, "Basic"):
+            new_config = rag.RagEngineConfig(
+                name=config_name,
+                rag_managed_db_config=rag.RagManagedDbConfig(
+                    mode=rag.Spanner(tier=rag.Basic())
+                ),
+            )
+            rag.rag_data.update_rag_engine_config(rag_engine_config=new_config)
+            print("✅ Successfully updated to Spanner Basic tier via Vertex AI SDK!")
+            return
+    except Exception as e:
+        print(f"⚠️ SDK update attempt returned: {e}. Trying REST API fallback...", file=sys.stderr)
+
+    # Attempt 2: Via REST API with ADC
+    try:
+        import json
+        import urllib.request
+        import google.auth
+        import google.auth.transport.requests
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+
+        url = f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}/ragEngineConfig"
+        payload = json.dumps({"ragManagedDbConfig": {"spanner": {"basic": {}}}}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            print(f"✅ Successfully updated to Spanner Basic tier: {data}")
+            return
+    except Exception as e:
+        print(f"❌ Failed to set Spanner Basic tier: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_delete(args: argparse.Namespace) -> None:
     """Deletes a Vertex AI RAG Corpus by ID or display name."""
     rag = get_vertex_client(args.project, args.location)
@@ -279,7 +372,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Vertex AI RAG Corpus and .env Lifecycle Manager")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    default_rag_location = os.getenv("RAG_LOCATION") or os.getenv("GOOGLE_CLOUD_LOCATION", "us-east5")
+    default_rag_location = os.getenv("RAG_LOCATION") or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
     p_create = subparsers.add_parser("create", help="Create or fetch Vertex AI RAG Corpus")
     p_create.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
@@ -292,6 +385,16 @@ def main() -> None:
     p_switch.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
     p_switch.add_argument("--location", default=default_rag_location)
     p_switch.set_defaults(func=cmd_switch_serverless)
+
+    p_spanner = subparsers.add_parser("switch-spanner-basic", help="Set project RAG Engine to Spanner Basic tier")
+    p_spanner.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
+    p_spanner.add_argument("--location", default=default_rag_location)
+    p_spanner.set_defaults(func=cmd_switch_spanner_basic)
+
+    p_cfg = subparsers.add_parser("get-config", help="Get active RagEngineConfig for project/location")
+    p_cfg.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT", "mongo-experiments"))
+    p_cfg.add_argument("--location", default=default_rag_location)
+    p_cfg.set_defaults(func=cmd_get_config)
 
 
     p_del = subparsers.add_parser("delete", help="Delete Vertex AI RAG Corpus")
