@@ -1,0 +1,14 @@
+--- PAGE 1 ---
+ITEM 1. BUSINESS
+Company Name: Stratosphere BioCloud Inc.
+Ticker Symbol: SBIO
+Fiscal Year Ended: FY2025
+We are modernizing genomics data pipelines on cloud infrastructure.
+--- PAGE 2 ---
+ITEM 1A. RISK FACTORS
+Rising GPU compute expenses and HIPAA compliance risks.
+--- PAGE 3 ---
+ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS
+Total Revenue: $3.20 billion (+15.4% YoY)
+Operating Income: $480 million (+18.0% YoY)
+Free Cash Flow: $390 million (+21.0% YoY)
