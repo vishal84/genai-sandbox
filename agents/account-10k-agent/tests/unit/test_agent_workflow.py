@@ -37,8 +37,8 @@ def test_analyze_10k_node_and_tool() -> None:
         custom_focus="Mainframe Exit & GenAI FinOps",
     )
 
-    assert report["ticker"] == "APXR"
-    assert report["company_name"] == "Apex Cloud & Retail Corp."
+    assert report["ticker"] == "APXC"
+    assert report["company_name"] == "Apex OmniRetail & Cloud Holdings Inc."
     assert report["account_health_score"] >= 70
     assert len(report["financial_metrics"]) >= 3
     assert len(report["strategic_initiatives"]) >= 2
@@ -54,7 +54,7 @@ def test_analyze_10k_node_and_tool() -> None:
 
 
 def test_query_10k_workflow_and_tool() -> None:
-    doc_meta = rag_manager.load_sample_10k("voltgrid_industrial_2025_10k.txt")
+    doc_meta = rag_manager.load_sample_10k("vanguard_industrial_fintech_2025_10k.txt")
     res = query_10k_filings_tool(
         query="What are the ERP fragmentation and cybersecurity risks in Item 1A?",
         document_name=doc_meta["display_name"],
@@ -66,4 +66,5 @@ def test_query_10k_workflow_and_tool() -> None:
 
     listed = list_indexed_10k_documents_tool()
     assert listed["count"] >= 1
+
 

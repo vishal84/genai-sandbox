@@ -26,23 +26,24 @@ def test_status_and_samples_endpoints() -> None:
 def test_load_sample_and_list_accounts() -> None:
     res = client.post(
         "/api/sample",
-        json={"sample_key": "voltgrid_industrial_2025_10k.txt"},
+        json={"sample_key": "vanguard_industrial_fintech_2025_10k.txt"},
     )
     assert res.status_code == 200
     payload = res.json()
     assert payload["status"] == "success"
     report = payload["account_report"]
-    assert report["ticker"] == "VLTX"
+    assert report["ticker"] == "VIFC"
     assert len(report["recommendations"]) >= 2
 
     accts_res = client.get("/api/accounts")
     assert accts_res.status_code == 200
     accounts = accts_res.json()["accounts"]
-    assert any(a["ticker"] == "VLTX" for a in accounts)
+    assert any(a["ticker"] == "VIFC" for a in accounts)
 
     detail_res = client.get(f"/api/accounts/{report['account_id']}")
     assert detail_res.status_code == 200
-    assert detail_res.json()["company_name"] == "VoltGrid Industrial Technologies Inc."
+    assert detail_res.json()["company_name"] == "Vanguard Industrial & FinTech Corp."
+
 
 
 def test_upload_custom_10k_and_chat() -> None:

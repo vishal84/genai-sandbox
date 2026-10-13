@@ -92,10 +92,12 @@ build-frontend: ## Build the React + Vite + Tailwind frontend into app/static
 	@echo "📦 Building React + Tailwind frontend..."
 	@cd frontend && npm install && npm run build
 
-.PHONY: run-local
+.PHONY: run-local playground
+playground: run-local ## Alias for run-local
 run-local: ## Run the agent and frontend locally via FastAPI and uvicorn
 	@echo "🌐 Starting account-10k-agent at http://localhost:8080..."
 	@uv run python -m uvicorn app.fast_api_app:app --host 0.0.0.0 --port 8080 --reload
+
 
 .PHONY: deploy-cloud-run
 deploy-cloud-run: ## Build and deploy the agent container to Cloud Run

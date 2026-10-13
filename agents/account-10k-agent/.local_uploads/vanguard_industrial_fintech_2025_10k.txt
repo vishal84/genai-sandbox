@@ -1,0 +1,24 @@
+--- PAGE 1 ---
+UNITED STATES SECURITIES AND EXCHANGE COMMISSION
+FORM 10-K — ANNUAL REPORT FOR THE FISCAL YEAR ENDED DECEMBER 31, 2025
+Exact Name of Registrant: Vanguard Industrial & FinTech Corp.
+Trading Symbol: VIFC (NYSE)
+
+ITEM 1. BUSINESS
+Vanguard Industrial & FinTech Corp. ("Vanguard") provides embedded equipment financing, treasury payment rails, and IoT predictive maintenance software to 48,000 commercial manufacturing clients.
+Strategic Priorities for FY2026:
+- AI Underwriting & Fraud Prevention: Modernizing credit risk scoring and real-time wire fraud detection using machine learning on Vertex cloud infrastructure.
+- Post-Merger ERP & Database Consolidation: Following three acquisitions in 2024-2025, Vanguard operates 7 disparate SQL/mainframe ledgers causing $42M in duplicate licensing and manual reconciliation delays.
+
+--- PAGE 2 ---
+ITEM 1A. RISK FACTORS
+- High Cloud & Mainframe Cost Escalation (High Severity): Third-party mainframe and legacy database licensing renewals increased 34% in FY2025, reducing net operating margin by 180 bps.
+- Real-Time Payment Fraud & Regulatory Compliance Risk (High Severity): Synthetic identity fraud in commercial equipment leasing rose 41% YoY, resulting in $29.5 million in credit charge-offs.
+- Delayed Financial Close & Audit Remediation (Medium Severity): Siloed data warehouses across acquired subsidiaries delayed quarterly close cycles by 6 business days.
+
+--- PAGE 3 ---
+ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS (MD&A) & ITEM 8. FINANCIAL STATEMENTS
+- Total Revenue: $6.42 billion in FY2025 (+9.2% YoY vs. $5.88 billion in FY2024).
+- Operating Income: $712 million (-3.5% YoY due to $42M duplicate IT/mainframe costs and $29.5M fraud provisions).
+- Free Cash Flow: $540 million (+4.1% YoY); Cash & Equivalents of $1.15 billion.
+- IT & Cloud Modernization Budget: CFO announced a $190 million cost-takeout and database consolidation initiative ("OneVanguard Platform") targeting $55 million in annualized run-rate savings by FY2027.
