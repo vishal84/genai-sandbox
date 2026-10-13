@@ -10,15 +10,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from a2a.server.apps import A2AFastAPIApplication
-from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
-from google.adk.a2a.utils.agent_card_builder import AgentCardBuilder
 from google.adk.runners import Runner
 from google.cloud import logging as google_cloud_logging
 from pydantic import BaseModel
@@ -26,15 +22,15 @@ from pydantic import BaseModel
 from app.agent import (
     Account10KWorkflowState,
     analyze_10k_node,
-     app as adk_app,
+    app as adk_app,
     filter_node,
     ingest_node,
     rag_manager,
     retrieve_node,
     synthesize_node,
 )
-from app.app_utils.a2a import build_a2a_card_url
-from app.app_utils.services import build_runtime_services
+from app.app_utils.a2a import attach_a2a_routes
+from app.app_utils.services import get_artifact_service, get_session_service
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import (
     AccountAnalysisReport,
@@ -67,65 +63,21 @@ def _invoke_node(node_obj: Any, state: Account10KWorkflowState) -> dict[str, Any
     return node_obj(state)
 
 
-async def attach_a2a_routes(
-    fast_api_app: FastAPI,
-    *,
-    artifact_service: Any,
-    session_service: Any,
-    memory_service: Any,
-    credentials_service: Any,
-) -> None:
-    """Attaches A2A protocol endpoints for the root ADK agent."""
-    runner = Runner(
-        app=adk_app,
-        artifact_service=artifact_service,
-        session_service=session_service,
-        memory_service=memory_service,
-        credential_service=credentials_service,
-    )
-    executor = A2aAgentExecutor(runner=runner)
-    task_store = InMemoryTaskStore()
-    request_handler = DefaultRequestHandler(
-        agent_executor=executor,
-        task_store=task_store,
-    )
-    card_builder = AgentCardBuilder(
-        agent=adk_app.root_agent,
-        rpc_url=build_a2a_card_url(A2A_PATH_PREFIX),
-    )
-    agent_card = await card_builder.build()
-    a2a_app = A2AFastAPIApplication(
-        agent_card=agent_card,
-        http_handler=request_handler,
-    )
-    a2a_app.add_routes_to_app(
-        fast_api_app,
-        agent_card_url=f"{A2A_PATH_PREFIX}/.well-known/agent-card.json",
-        rpc_url=A2A_PATH_PREFIX,
-    )
-
-
 @asynccontextmanager
 async def lifespan(fast_api_app: FastAPI) -> AsyncIterator[None]:
     """FastAPI lifespan hook for telemetry, A2A registration, and SPA static serving."""
     setup_telemetry()
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    agent_engine_id = os.environ.get("AGENT_ENGINE_ID")
-    gcs_logs_bucket = os.environ.get("LOGS_BUCKET_NAME")
-
-    artifact_service, session_service, memory_service, credentials_service = (
-        build_runtime_services(
-            project=project,
-            agent_engine_id=agent_engine_id,
-            gcs_logs_bucket=gcs_logs_bucket,
-        )
+    runner = Runner(
+        app=adk_app,
+        artifact_service=get_artifact_service(),
+        session_service=get_session_service(),
     )
     await attach_a2a_routes(
         fast_api_app,
-        artifact_service=artifact_service,
-        session_service=session_service,
-        memory_service=memory_service,
-        credentials_service=credentials_service,
+        agent=adk_app.root_agent,
+        runner=runner,
+        task_store=InMemoryTaskStore(),
+        rpc_path=A2A_PATH_PREFIX,
     )
 
     # Seed default sample 10-K on startup if store is empty so UI has an initial account ready
