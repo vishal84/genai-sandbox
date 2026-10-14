@@ -9,6 +9,10 @@ import os
 import re
 from typing import Any, Literal
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from google.adk import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
