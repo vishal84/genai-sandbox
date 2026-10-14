@@ -4,7 +4,7 @@ FROM node:20-slim AS frontend-builder
 
 WORKDIR /build/frontend
 COPY frontend/package*.json ./
-RUN npm ci --silent || npm install --silent
+RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
@@ -15,13 +15,13 @@ RUN pip install --no-cache-dir uv==0.8.13
 
 WORKDIR /code
 
-COPY ./pyproject.toml ./README.md ./uv.lock* ./
+COPY ./pyproject.toml ./README.md ./
 COPY ./app ./app
 
 # Copy built frontend assets from Stage 1 (/build/app/static) to ./app/static
 COPY --from=frontend-builder /build/app/static ./app/static
 
-RUN uv sync
+RUN uv pip install --system -e . --index-url https://pypi.org/simple
 
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
@@ -31,5 +31,5 @@ ENV AGENT_VERSION=${AGENT_VERSION}
 
 EXPOSE 8080
 
-CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
 

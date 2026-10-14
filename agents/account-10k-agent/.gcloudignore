@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+frontend/node_modules
+.local_uploads
+.env
+.pytest_cache
+uv.lock
